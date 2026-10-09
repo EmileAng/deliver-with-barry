@@ -170,11 +170,40 @@ def keyboard():
 # le joueur touche-t-il une maison (ou la pizzeria) ?
 def player_touches_house():
     if player.rect.colliderect(pizzeria.rect):
+        if len(player.inventory) <= 6:
+            player.inventory.append(1)
         return True
     for house in all_houses:
         if player.rect.colliderect(house.rect):
+            # livrer une pizza si la maison en attend une et que le joueur en a
+            if house.delivery_state and len(player.inventory) > 0:
+                player.inventory.pop()
+                house.end_delivery()
             return True
     return False
+
+# --- LIVRAISONS ---
+# toutes les 10 secondes, une maison demande une pizza (3 demandes en même temps au maximum)
+MAX_DELIVERIES = 3
+NEW_DELIVERY_EVERY = 10000 # millisecondes
+last_delivery_time = pygame.time.get_ticks()
+
+def update_deliveries():
+    global last_delivery_time
+    now = pygame.time.get_ticks()
+
+    # les demandes de plus de 20 secondes sont ratées
+    for house in all_houses:
+        if house.delivery_state and house.is_expired(now):
+            house.end_delivery()
+
+    # nouvelle demande toutes les 10 secondes, s'il y a de la place
+    if now - last_delivery_time >= NEW_DELIVERY_EVERY:
+        last_delivery_time = now
+        waiting_houses = [house for house in all_houses if house.delivery_state]
+        free_houses = [house for house in all_houses if not house.delivery_state]
+        if len(waiting_houses) < MAX_DELIVERIES and len(free_houses) > 0:
+            random.choice(free_houses).ask_delivery(now)
 
 # le joueur est-il entièrement dans l'écran ? (contains : toute la hitbox doit être à l'intérieur)
 def player_is_on_screen():
@@ -217,10 +246,17 @@ while running :
 
     screen.blit(player.image, player.rect)
 
+    # demandes de livraison : apparition, expiration et bulles
+    update_deliveries()
+    now = pygame.time.get_ticks()
+    for house in all_houses:
+        house.draw_bubble(screen, now)
+
     #screen.blit(house_test.image, house_test.rect)
     pygame.display.flip()
 
     clock.tick(60)
-print(all_zones)
-print(matrix)
+print(f"inventaire joueur :{player.inventory}")
+print(f"toutes les zones {all_zones}")
+print(f"matrice {matrix}")
 pygame.quit()

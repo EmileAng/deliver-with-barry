@@ -299,5 +299,4 @@ def choose_pizzeria(matrix):
                 matrix[y+1][x] = 0
                 connect_all_zones(matrix)
                 return x, y
-
         return random.choice(candidates)
