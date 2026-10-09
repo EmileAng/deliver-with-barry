@@ -1,18 +1,17 @@
 import pygame
-from utils import load_image, get_parcels_size
+from images import load_image
+from utils import get_parcels_size
 
 
 # les buildings ont en commun une position et ont besoin d'une image
 class Parcel(pygame.sprite.Sprite):
     
-    def __init__(self, id, image, location_x, location_y, spawn=True):
+    def __init__(self, image, location_x, location_y):
         super().__init__()
-        
-        # créer un id 
-        self.id = id
-        
+
         parcel_width, parcel_height = get_parcels_size()
         if image != None:
+            
             # convertir l'image aux proportions de l'écran
             self.image = load_image(image, parcel_width, parcel_height)
 

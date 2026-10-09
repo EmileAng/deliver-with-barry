@@ -1,5 +1,6 @@
 from models.parcel import Parcel
-from utils import load_road_image, get_parcels_size
+from images import load_road_image
+from utils import get_parcels_size
 
 # pour chaque type de route : l'image, et les bords où mesurer l'asphalte
 # (bord haut/bas pour la route verticale, bord gauche/droite pour la route horizontale)
@@ -11,8 +12,8 @@ ROAD_SPRITES = {
 }
 
 class Road(Parcel):
-    def __init__(self, id, image, location_x, location_y, grid_infos, rotation=0):
-        super().__init__(id, None, location_x, location_y)
+    def __init__(self, location_x, location_y, grid_infos, rotation=0):
+        super().__init__(None, location_x, location_y)
 
         parcel_width, parcel_height = get_parcels_size()
 

@@ -1,11 +1,11 @@
 import pygame
 
-# taille des icônes et espacements du bandeau (en pixels)
+# taille des icônes et espacements du bandeau 
 ICON_SIZE = 28
-PADDING = 8 # marge intérieure du bandeau
-GAP = 6 # entre une icône et son texte
-SPACING = 18 # entre deux groupes (coeurs / pizzas / score)
-MARGIN = 10 # distance entre le bandeau et le bord de l'écran
+PADDING = 8 
+GAP = 6 
+SPACING = 18 
+MARGIN = 10 
 
 # opacité du bandeau : normale, et quand il cache le joueur ou une maison qui attend une pizza
 NORMAL_ALPHA = 255
@@ -20,7 +20,6 @@ def load_icon(path):
 
 # le bandeau en haut à gauche : PV, pizzas transportées et score
 class Hud:
-
     def __init__(self):
         self.heart = load_icon("assets/hud/heart.png")
         # coeur perdu : le même, presque transparent

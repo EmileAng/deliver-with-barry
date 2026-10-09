@@ -1,6 +1,6 @@
 from models.parcel import Parcel
-from utils import load_image, get_parcels_size
-import random
+from images import load_image
+from utils import get_parcels_size
 
 # la demande devient urgente quand il reste ce temps pour livrer (en millisecondes)
 # (la durée totale d'une demande est choisie par main.py et diminue avec les livraisons)
@@ -19,28 +19,24 @@ def get_bubble_image(urgent):
 
 class House(Parcel):
 
-    def __init__(self, id, image, location_x, location_y):
+    def __init__(self, image, location_x, location_y):
 
-        super().__init__(id, image, location_x, location_y)
+        super().__init__(image, location_x, location_y)
 
-        self.spawn = random.choices([True, False], weights=[80,20])[0]
         self.delivery_state = False
         # moment (pygame.time.get_ticks) où la demande a commencé
         self.delivery_start = 0
-        # temps laissé au joueur pour livrer cette demande (en millisecondes)
         self.delivery_duration = 0
 
-    # la maison demande une pizza, à livrer en moins de duration millisecondes
     def ask_delivery(self, now, duration):
         self.delivery_state = True
         self.delivery_start = now
         self.delivery_duration = duration
 
-    # la pizza a été livrée (ou la demande a expiré)
     def end_delivery(self):
         self.delivery_state = False
 
-    # plus que 10 secondes pour livrer ?
+    # moitié du temps écoulé
     def is_urgent(self, now):
         return now - self.delivery_start >= self.delivery_duration - URGENT_REMAINING
 
@@ -53,6 +49,5 @@ class House(Parcel):
         if not self.delivery_state:
             return
         bubble = get_bubble_image(self.is_urgent(now))
-        # bulle centrée en haut de la maison
         bubble_rect = bubble.get_rect(centerx=self.rect.centerx, bottom=self.rect.centery)
         screen.blit(bubble, bubble_rect)
