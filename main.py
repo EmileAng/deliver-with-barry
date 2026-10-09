@@ -3,8 +3,10 @@ from models.player import Player
 from models.house import House
 from models.road import Road
 from models.pizzeria import PlayerBase
+from models.hud import Hud
 from utils import connect_all_zones, get_parcels_size, get_road_neighbors, get_road_rotation, separate_intersections, connect_isolated_houses, choose_pizzeria
 import random
+import json
 
 # charger les composants à l'intérieur (collisions, décors, sprites)
 pygame.init()
@@ -12,6 +14,14 @@ pygame.init()
 # initialiser et créer une police
 pygame.font.init()
 custom_font = pygame.font.SysFont('Impact', 30)
+
+# charger les scores sauvegardés (une seule fois, avant la boucle)
+# si le fichier n'existe pas ou est vide, on part de zéro
+try:
+    with open("data.json", "r", encoding="utf-8") as file :
+        scores = json.load(file)
+except (FileNotFoundError, json.JSONDecodeError):
+    scores = {}
 
 screen = pygame.display.set_mode((1280,720))
 pygame.display.set_caption("Mon jeu")
@@ -75,12 +85,10 @@ for y in range(9):
 all_zones = connect_all_zones(matrix)
 
 # Connecter les maisons isolées
-# (on le fait APRÈS la règle 2, car la règle 2 pose des maisons qui peuvent enfermer leurs voisines)
 connect_isolated_houses(matrix)
     
 # --- ANTI-CROISEMENTS COLLÉS ---
 # On sépare les T et les + qui se touchent en remplaçant une route en trop par une maison
-# (le tiling d'après se base sur les vrais voisins, donc l'image correspond toujours aux routes)
 separate_intersections(matrix)
 
 # --- PIZZERIA ---
@@ -152,8 +160,10 @@ player.rect.centery = pizzeria.rect.centery + parcel_height
 
 # déplacements : renvoie de combien bouger en x et en y selon les flèches appuyées
 # (deux flèches en même temps = diagonale, deux flèches opposées s'annulent)
-player_speed = 2
-def keyboard():
+def keyboard(boost=False):
+    player_speed = 2
+    if boost == True :
+        player_speed = 5
     keys = pygame.key.get_pressed()
     dx = 0
     dy = 0
@@ -165,50 +175,114 @@ def keyboard():
         dy += player_speed
     if keys[pygame.K_UP]:
         dy -= player_speed
+    
     return dx, dy
+
+# nombre maximum de pizzas que le joueur peut transporter
+MAX_PIZZAS = 7
+
+# bandeau en haut à gauche (PV, pizzas, score)
+hud = Hud()
 
 # le joueur touche-t-il une maison (ou la pizzeria) ?
 def player_touches_house():
+    global deliveries_done
     if player.rect.colliderect(pizzeria.rect):
-        if len(player.inventory) <= 6:
+        if len(player.inventory) < MAX_PIZZAS:
             player.inventory.append(1)
         return True
     for house in all_houses:
         if player.rect.colliderect(house.rect):
             # livrer une pizza si la maison en attend une et que le joueur en a
+            # (chaque livraison rapporte entre 1 et 4 points)
             if house.delivery_state and len(player.inventory) > 0:
                 player.inventory.pop()
                 house.end_delivery()
+                player.score += random.randint(1, 4)
+                deliveries_done += 1
             return True
     return False
 
 # --- LIVRAISONS ---
-# toutes les 10 secondes, une maison demande une pizza (3 demandes en même temps au maximum)
+# une maison demande une pizza à intervalle régulier (3 demandes en même temps au maximum)
+# plus le joueur a livré de pizzas, plus les demandes arrivent vite, sans descendre sous 10 secondes
 MAX_DELIVERIES = 3
-NEW_DELIVERY_EVERY = 10000 # millisecondes
+FIRST_DELIVERY_DELAY = 20000 # millisecondes, au début de la partie
+DELAY_DECREASE = 1000 # millisecondes en moins par livraison réussie
+MIN_DELIVERY_DELAY = 10000 # millisecondes, jamais moins
 last_delivery_time = pygame.time.get_ticks()
+deliveries_done = 0
+
+# temps d'attente entre deux demandes, selon le nombre de livraisons déjà faites
+def delivery_delay():
+    return max(MIN_DELIVERY_DELAY, FIRST_DELIVERY_DELAY - deliveries_done * DELAY_DECREASE)
+
+# temps laissé pour livrer une demande : diminue aussi avec les livraisons, sans descendre sous 15 secondes
+FIRST_DELIVERY_DURATION = 20000 # millisecondes, au début de la partie
+DURATION_DECREASE = 500 # millisecondes en moins par livraison réussie
+MIN_DELIVERY_DURATION = 15000 # millisecondes, jamais moins
+
+def delivery_duration():
+    return max(MIN_DELIVERY_DURATION, FIRST_DELIVERY_DURATION - deliveries_done * DURATION_DECREASE)
+
+# quand plus aucune maison n'attend de pizza, la prochaine demande arrive au plus tard 3 secondes après
+EMPTY_DELIVERY_DELAY = 3000 # millisecondes
+empty_since = None # moment où il n'y a plus eu aucune demande (None s'il y en a)
 
 def update_deliveries():
-    global last_delivery_time
+    global last_delivery_time, empty_since
     now = pygame.time.get_ticks()
 
-    # les demandes de plus de 20 secondes sont ratées
+    # les demandes dont le temps est écoulé sont ratées : le joueur perd un PV
     for house in all_houses:
         if house.delivery_state and house.is_expired(now):
             house.end_delivery()
+            player.lives = max(0, player.lives - 1)
 
-    # nouvelle demande toutes les 10 secondes, s'il y a de la place
-    if now - last_delivery_time >= NEW_DELIVERY_EVERY:
+    waiting_houses = [house for house in all_houses if house.delivery_state]
+    free_houses = [house for house in all_houses if not house.delivery_state]
+
+    # retenir depuis quand plus aucune maison n'attend
+    if len(waiting_houses) > 0:
+        empty_since = None
+    elif empty_since is None:
+        empty_since = now
+
+    # nouvelle demande quand le temps d'attente est écoulé (ou 3 secondes sans aucune demande), s'il y a de la place
+    normal_wait_over = now - last_delivery_time >= delivery_delay()
+    empty_wait_over = empty_since is not None and now - empty_since >= EMPTY_DELIVERY_DELAY
+    if normal_wait_over or empty_wait_over:
         last_delivery_time = now
-        waiting_houses = [house for house in all_houses if house.delivery_state]
-        free_houses = [house for house in all_houses if not house.delivery_state]
         if len(waiting_houses) < MAX_DELIVERIES and len(free_houses) > 0:
-            random.choice(free_houses).ask_delivery(now)
+            random.choice(free_houses).ask_delivery(now, delivery_duration())
+            empty_since = None
+
+# boost : 1 point de score perdu par seconde de boost
+# (le temps de boost s'additionne d'un appui à l'autre, pour que les petits appuis comptent aussi)
+BOOST_COST_EVERY = 1000 # millisecondes
+boost_time = 0
 
 # le joueur est-il entièrement dans l'écran ? (contains : toute la hitbox doit être à l'intérieur)
 def player_is_on_screen():
     return screen.get_rect().contains(player.rect)
 
+# --- GAME OVER ---
+# voile noir semi-transparent posé sur tout l'écran, et le texte en gros
+dark_overlay = pygame.Surface(screen.get_size(), pygame.SRCALPHA)
+dark_overlay.fill((0, 0, 0, 170))
+game_over_font = pygame.font.SysFont('Impact', 120)
+game_over_text = game_over_font.render("GAME OVER", True, (255, 255, 255))
+score_font = pygame.font.SysFont('Impact', 40)
+
+# le score n'est sauvegardé qu'une fois, au moment de la défaite (pas à chaque image)
+score_saved = False
+
+# sauvegarder le score de la partie et mettre à jour le meilleur score dans data.json
+def save_score():
+    scores["best_score"] = max(scores.get("best_score", 0), player.score)
+    scores.setdefault("all_scores", []).append(player.score)
+    with open("data.json", "w", encoding="utf-8") as file:
+        json.dump(scores, file, indent=4)
 
 while running :
     for event in pygame.event.get():
@@ -220,8 +294,28 @@ while running :
     all_roads.draw(screen)
     all_houses.draw(screen)
     screen.blit(pizzeria.image, pizzeria.rect)
+
+    # plus de PV : la partie est finie, le joueur ne peut plus bouger
+    game_over = player.lives <= 0
+
     # bouger le joueur, sans jamais entrer dans une maison ni sortir de l'écran
-    dx, dy = keyboard()
+
+    # boost avec ESPACE : il coûte 1 point de score par seconde, donc impossible sans score
+    key = pygame.key.get_pressed()
+    boost = False
+    if key[pygame.K_SPACE] and player.score > 0:
+        boost = True
+    dx, dy = keyboard(boost)
+    if game_over:
+        dx, dy = 0, 0
+
+    # on ne paie que si on roule vraiment en boost (pas si on reste sur place)
+    if boost and (dx != 0 or dy != 0):
+        boost_time += clock.get_time() # millisecondes depuis l'image précédente
+        while boost_time >= BOOST_COST_EVERY and player.score > 0:
+            boost_time -= BOOST_COST_EVERY
+            player.score -= 1
+
     # on essaie d'abord le vrai mouvement (diagonale comprise), puis seulement en x, puis seulement en y :
     # en diagonale contre une maison, le joueur glisse le long du mur au lieu de rester bloqué
     for essai_dx, essai_dy in [(dx, dy), (dx, 0), (0, dy)]:
@@ -234,23 +328,40 @@ while running :
             break # ce mouvement est possible, on le garde
         player.go_back()
 
-    #afficher les hitbox
-    for house in all_houses:
-        pygame.draw.rect(screen,(255,0,0), house.rect, 2)
-    pygame.draw.rect(screen,(255,165,0), pizzeria.rect, 2)
-    for road in all_roads:
-        pygame.draw.rect(screen,(0,255,0), road.rect,2)
-
-    # afficher la hitbox du joueur
-    pygame.draw.rect(screen, (0,0,255), player.rect, 2)
+    if key[pygame.K_h]:
+        #afficher les hitbox
+        for house in all_houses:
+            pygame.draw.rect(screen,(255,0,0), house.rect, 2)
+        pygame.draw.rect(screen,(255,165,0), pizzeria.rect, 2)
+        for road in all_roads:
+            pygame.draw.rect(screen,(0,255,0), road.rect,2)
+        pygame.draw.rect(screen, (0,0,255), player.rect, 2)
 
     screen.blit(player.image, player.rect)
 
-    # demandes de livraison : apparition, expiration et bulles
-    update_deliveries()
+    # demandes de livraison : apparition, expiration et bulles (plus rien n'apparaît après la défaite)
+    if not game_over:
+        update_deliveries()
     now = pygame.time.get_ticks()
     for house in all_houses:
         house.draw_bubble(screen, now)
+
+    # bandeau PV / pizzas / score, dessiné en dernier pour être par-dessus tout
+    hud.draw(screen, player, MAX_PIZZAS, all_houses)
+
+    # écran de fin : on assombrit tout et on écrit GAME OVER au milieu, avec le score et le meilleur score
+    if game_over:
+        if not score_saved:
+            save_score()
+            score_saved = True
+
+        screen.blit(dark_overlay, (0, 0))
+        centre_x, centre_y = screen.get_rect().center
+        screen.blit(game_over_text, game_over_text.get_rect(center=(centre_x, centre_y - 40)))
+        score_text = score_font.render(f"Score : {player.score}", True, (255, 255, 255))
+        screen.blit(score_text, score_text.get_rect(center=(centre_x, centre_y + 50)))
+        best_text = score_font.render(f"Meilleur score : {scores['best_score']}", True, (255, 215, 0))
+        screen.blit(best_text, best_text.get_rect(center=(centre_x, centre_y + 100)))
 
     #screen.blit(house_test.image, house_test.rect)
     pygame.display.flip()

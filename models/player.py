@@ -37,6 +37,11 @@ class Player(pygame.sprite.Sprite):
         # inventaire
         self.inventory = []
 
+        # pdv + score
+        self.max_lives = 3
+        self.lives = 3
+        self.score = 0
+
     # tourner le joueur vers une direction (ne fait rien s'il regarde déjà dans cette direction)
     def look(self, direction):
         if direction == self.direction:

@@ -2,9 +2,9 @@ from models.parcel import Parcel
 from utils import load_image, get_parcels_size
 import random
 
-# durée max d'une demande de livraison, et moment où elle devient urgente (en millisecondes)
-DELIVERY_DURATION = 20000
-URGENT_AFTER = 10000
+# la demande devient urgente quand il reste ce temps pour livrer (en millisecondes)
+# (la durée totale d'une demande est choisie par main.py et diminue avec les livraisons)
+URGENT_REMAINING = 10000
 
 # images des bulles, chargées une seule fois pour toutes les maisons
 bubble_images = {}
@@ -27,11 +27,14 @@ class House(Parcel):
         self.delivery_state = False
         # moment (pygame.time.get_ticks) où la demande a commencé
         self.delivery_start = 0
+        # temps laissé au joueur pour livrer cette demande (en millisecondes)
+        self.delivery_duration = 0
 
-    # la maison demande une pizza
-    def ask_delivery(self, now):
+    # la maison demande une pizza, à livrer en moins de duration millisecondes
+    def ask_delivery(self, now, duration):
         self.delivery_state = True
         self.delivery_start = now
+        self.delivery_duration = duration
 
     # la pizza a été livrée (ou la demande a expiré)
     def end_delivery(self):
@@ -39,11 +42,11 @@ class House(Parcel):
 
     # plus que 10 secondes pour livrer ?
     def is_urgent(self, now):
-        return now - self.delivery_start >= URGENT_AFTER
+        return now - self.delivery_start >= self.delivery_duration - URGENT_REMAINING
 
-    # les 20 secondes sont-elles écoulées ?
+    # le temps pour livrer est-il écoulé ?
     def is_expired(self, now):
-        return now - self.delivery_start >= DELIVERY_DURATION
+        return now - self.delivery_start >= self.delivery_duration
 
     # afficher la bulle au-dessus de la maison si elle attend une livraison
     def draw_bubble(self, screen, now):
