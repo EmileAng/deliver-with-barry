@@ -1,15 +1,17 @@
 import pygame
 
-# taille des icônes et espacements du bandeau 
+
+# taille des icônes et espacements du bandeau
 ICON_SIZE = 28
-PADDING = 8 
-GAP = 6 
-SPACING = 18 
-MARGIN = 10 
+PADDING = 8
+GAP = 6
+SPACING = 18
+MARGIN = 10
 
 # opacité du bandeau : normale, et quand il cache le joueur ou une maison qui attend une pizza
 NORMAL_ALPHA = 255
 HIDDEN_ALPHA = 60
+
 
 # charger une icône en gardant ses proportions (son plus grand côté fait ICON_SIZE)
 def load_icon(path):
@@ -18,8 +20,10 @@ def load_icon(path):
     scale = ICON_SIZE / max(width, height)
     return pygame.transform.smoothscale(image, (round(width * scale), round(height * scale)))
 
+
 # le bandeau en haut à gauche : PV, pizzas transportées et score
 class Hud:
+
     def __init__(self):
         self.heart = load_icon("assets/hud/heart.png")
         # coeur perdu : le même, presque transparent

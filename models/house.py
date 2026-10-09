@@ -1,6 +1,7 @@
-from models.parcel import Parcel
 from images import load_image
+from models.parcel import Parcel
 from utils import get_parcels_size
+
 
 # la demande devient urgente quand il reste ce temps pour livrer (en millisecondes)
 # (la durée totale d'une demande est choisie par main.py et diminue avec les livraisons)
@@ -8,6 +9,7 @@ URGENT_REMAINING = 10000
 
 # images des bulles, chargées une seule fois pour toutes les maisons
 bubble_images = {}
+
 
 def get_bubble_image(urgent):
     if not bubble_images:
@@ -17,10 +19,10 @@ def get_bubble_image(urgent):
         bubble_images[True] = load_image("assets/bubbles/bubble_u.png", parcel_width // 2, parcel_height // 2)
     return bubble_images[urgent]
 
+
 class House(Parcel):
 
     def __init__(self, image, location_x, location_y):
-
         super().__init__(image, location_x, location_y)
 
         self.delivery_state = False
@@ -36,7 +38,7 @@ class House(Parcel):
     def end_delivery(self):
         self.delivery_state = False
 
-    # moitié du temps écoulé
+    # reste-t-il moins de URGENT_REMAINING millisecondes pour livrer ?
     def is_urgent(self, now):
         return now - self.delivery_start >= self.delivery_duration - URGENT_REMAINING
 
